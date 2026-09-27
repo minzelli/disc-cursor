@@ -41,7 +41,7 @@ A minimalist, high-contrast Windows cursor scheme with disc geometry, static (`.
 
 ### Option 1: Download from Latest Release (Recommended)
 
-1. Download the `.zip` from **[Releases](https://github.com/minzelli/disc-cursor/releases/latest)**.
+1. Download the **Source code (zip)** from **[Releases](https://github.com/minzelli/disc-cursor/releases/latest)**.
 2. Extract the archive.
 3. Open PowerShell inside the extracted folder and run:
 
