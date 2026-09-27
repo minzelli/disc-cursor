@@ -60,6 +60,11 @@ function restore_standard_cursors {
         Set-ItemProperty -LiteralPath $REGISTRY_ROOT_PATH `
             -Name '(Default)' `
             -Value 'Windows Default'
+
+        Set-ItemProperty -LiteralPath $REGISTRY_ROOT_PATH `
+            -Name 'Scheme Source' `
+            -Value 0 `
+            -Type DWord
     }
 }
 
@@ -67,13 +72,11 @@ function delete_scheme_entry {
     param([string]$scheme_name)
 
     $is_registered = tests_scheme_registration -scheme_name $scheme_name
-    if (-not $is_registered) {
-        throw [System.InvalidOperationException]::new("Cursor scheme registration does not exist: '$scheme_name'. Verify installation status before attempting removal.")
+    if ($is_registered) {
+        Remove-ItemProperty -LiteralPath $REGISTRY_SCHEMES_PATH `
+            -Name $scheme_name `
+            -ErrorAction SilentlyContinue
     }
-
-    Remove-ItemProperty -LiteralPath $REGISTRY_SCHEMES_PATH `
-        -Name $scheme_name `
-        -ErrorAction Stop
 }
 
 function purge_target_directory {
@@ -130,13 +133,15 @@ function broadcast_removal_notification {
     }
 
     $SPI_SETCURSORS = 0x0057
+    $SPIF_UPDATEINIFILE = 0x0001
     $SPIF_SENDCHANGE = 0x0002
+    $update_flags = $SPIF_UPDATEINIFILE -bor $SPIF_SENDCHANGE
 
     $has_broadcast = $native_reloader::SystemParametersInfo(
         $SPI_SETCURSORS,
         0,
         [string]::Empty,
-        $SPIF_SENDCHANGE
+        $update_flags
     )
 
     if (-not $has_broadcast) {

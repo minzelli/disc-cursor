@@ -82,7 +82,7 @@ function generated_cursor_inventory {
         [Cursor_Asset_Descriptor]::new('Pin', 'disc-location.cur')
     )
 
-    return ,$cursor_descriptors.ToArray()
+    return , $cursor_descriptors.ToArray()
 }
 
 function verifies_source_inventory {
@@ -152,13 +152,13 @@ function resolved_scheme_payload {
         'Arrow', 'Help', 'AppStarting', 'Wait',
         'Crosshair', 'IBeam', 'NWPen', 'No',
         'SizeNS', 'SizeWE', 'SizeNWSE', 'SizeNESW',
-        'SizeAll', 'UpArrow', 'Hand'
+        'SizeAll', 'UpArrow', 'Hand', 'Person', 'Pin'
     )
 
     $ordered_paths = [System.Collections.Generic.List[string]]::new()
     foreach ($role in $standard_roles) {
         $matched_descriptor = $inventory |
-            Where-Object { $_.role_name -eq $role }
+        Where-Object { $_.role_name -eq $role }
         $resolved_path = Join-Path -Path $target_directory `
             -ChildPath $matched_descriptor.file_name
         $ordered_paths.Add($resolved_path)
@@ -195,6 +195,11 @@ function register_cursor_scheme {
     Set-ItemProperty -LiteralPath $REGISTRY_ROOT_PATH `
         -Name '(Default)' `
         -Value $scheme_name
+
+    Set-ItemProperty -LiteralPath $REGISTRY_ROOT_PATH `
+        -Name 'Scheme Source' `
+        -Value 1 `
+        -Type DWord
 }
 
 function notify_system_shell {
@@ -227,14 +232,15 @@ function notify_system_shell {
     }
 
     $SPI_SETCURSORS = 0x0057
+    $SPIF_UPDATEINIFILE = 0x0001
     $SPIF_SENDCHANGE = 0x0002
-    $null_parameter = [string]::Empty
+    $update_flags = $SPIF_UPDATEINIFILE -bor $SPIF_SENDCHANGE
 
     $has_broadcast = $native_type::SystemParametersInfo(
         $SPI_SETCURSORS,
         0,
-        $null_parameter,
-        $SPIF_SENDCHANGE
+        [string]::Empty,
+        $update_flags
     )
 
     if (-not $has_broadcast) {
@@ -276,9 +282,11 @@ function execute_installation {
 
 $current_script_directory = if ($PSScriptRoot) {
     $PSScriptRoot
-} elseif ($MyInvocation.MyCommand.Path) {
+}
+elseif ($MyInvocation.MyCommand.Path) {
     Split-Path -Parent $MyInvocation.MyCommand.Path
-} else {
+}
+else {
     (Get-Location).ProviderPath
 }
 
