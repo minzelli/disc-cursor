@@ -232,9 +232,8 @@ function notify_system_shell {
     }
 
     $SPI_SETCURSORS = 0x0057
-    $SPIF_UPDATEINIFILE = 0x0001
     $SPIF_SENDCHANGE = 0x0002
-    $update_flags = $SPIF_UPDATEINIFILE -bor $SPIF_SENDCHANGE
+    $update_flags = $SPIF_SENDCHANGE
 
     $has_broadcast = $native_type::SystemParametersInfo(
         $SPI_SETCURSORS,
