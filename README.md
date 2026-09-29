@@ -49,8 +49,6 @@ A minimalist, high-contrast Windows cursor scheme with disc geometry, static (`.
 powershell -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-*(Or right-click `install.ps1` and select **Run with PowerShell**).*
-
 ---
 
 ### Option 2: Clone with Git
