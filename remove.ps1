@@ -2,22 +2,27 @@ Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
 
 if ([System.Environment]::OSVersion.Platform -ne [System.PlatformID]::Win32NT) {
-    throw [System.PlatformNotSupportedException]::new('This script is only supported on Windows operating systems.')
+    $platform_error = 'Host platform is not Windows. Run script on Windows.'
+    throw [System.PlatformNotSupportedException]::new($platform_error)
+}
+
+$current_identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+try {
+    $is_system_session = $current_identity.IsSystem
+}
+finally {
+    $current_identity.Dispose()
+}
+
+if ($is_system_session) {
+    $session_error = 'NT AUTHORITY\SYSTEM session denies execution. ' +
+        'Run in an interactive user session.'
+    throw [System.InvalidOperationException]::new($session_error)
 }
 
 $SCHEME_NAME = 'Disc'
 $REGISTRY_ROOT_PATH = 'HKCU:\Control Panel\Cursors'
 $REGISTRY_SCHEMES_PATH = 'HKCU:\Control Panel\Cursors\Schemes'
-
-class Removal_Summary_State {
-    [bool]$is_registry_cleared
-    [bool]$is_directory_cleared
-
-    Removal_Summary_State() {
-        $this.is_registry_cleared = $false
-        $this.is_directory_cleared = $false
-    }
-}
 
 function collected_standard_roles {
     [OutputType([string[]])]
@@ -31,20 +36,6 @@ function collected_standard_roles {
     )
 
     return ,$standard_roles
-}
-
-function tests_scheme_registration {
-    param([string]$scheme_name)
-
-    $has_schemes_key = Test-Path -LiteralPath $REGISTRY_SCHEMES_PATH
-    if (-not $has_schemes_key) {
-        return $false
-    }
-
-    $scheme_properties = Get-ItemProperty -LiteralPath $REGISTRY_SCHEMES_PATH
-    $is_present = [bool]($scheme_properties.PSObject.Properties[$scheme_name])
-
-    return $is_present
 }
 
 function restore_standard_cursors {
@@ -71,42 +62,91 @@ function restore_standard_cursors {
 function delete_scheme_entry {
     param([string]$scheme_name)
 
-    $is_registered = tests_scheme_registration -scheme_name $scheme_name
-    if ($is_registered) {
-        Remove-ItemProperty -LiteralPath $REGISTRY_SCHEMES_PATH `
-            -Name $scheme_name `
-            -ErrorAction SilentlyContinue
-    }
+    Remove-ItemProperty -LiteralPath $REGISTRY_SCHEMES_PATH `
+        -Name $scheme_name `
+        -ErrorAction SilentlyContinue
 }
 
 function purge_target_directory {
-    param([string]$target_directory)
+    param(
+        [string]$target_directory,
+        [string]$expected_root
+    )
 
     if ([string]::IsNullOrWhiteSpace($target_directory)) {
-        throw [System.ArgumentException]::new('Target directory parameter cannot be null or empty.')
+        $empty_target_error = 'Target directory parameter is empty. ' +
+            'Provide a valid path.'
+        throw [System.ArgumentException]::new($empty_target_error)
     }
 
-    $is_target_present = Test-Path -LiteralPath $target_directory
-    if (-not $is_target_present) {
-        Write-Warning -Message "Target cursor directory does not exist: '$target_directory'. Verify application data directory manually."
+    $canonical_target = [System.IO.Path]::GetFullPath($target_directory)
+    $canonical_root = [System.IO.Path]::GetFullPath($expected_root)
+
+    $is_within_root = $canonical_target.StartsWith(
+        $canonical_root,
+        [System.StringComparison]::OrdinalIgnoreCase
+    )
+    if (-not $is_within_root) {
+        $root_error = "Target path '$canonical_target' falls outside " +
+            'allowed root. Verify directory scope.'
+        throw [System.ArgumentException]::new($root_error)
+    }
+
+    $is_valid_scheme = $canonical_target.EndsWith(
+        'Disc_Cursor_Scheme\cursor',
+        [System.StringComparison]::OrdinalIgnoreCase
+    )
+    if (-not $is_valid_scheme) {
+        $scheme_error = "Target path '$canonical_target' does not match " +
+            'expected scheme. Verify scheme directory.'
+        throw [System.ArgumentException]::new($scheme_error)
+    }
+
+    if (-not (Test-Path -LiteralPath $canonical_target)) {
+        $missing_warning = "Target cursor directory '$canonical_target' " +
+            'does not exist. Verify application data directory.'
+        Write-Warning -Message $missing_warning
         return
     }
 
-    Remove-Item -LiteralPath $target_directory `
-        -Recurse `
-        -Force
+    $target_item = Get-Item -LiteralPath $canonical_target -Force
+    $is_reparse_point = [bool](
+        $target_item.Attributes -band [System.IO.FileAttributes]::ReparsePoint
+    )
 
-    $parent_directory = Split-Path -Parent $target_directory
-    if ((Test-Path -LiteralPath $parent_directory) -and
-        (@(Get-ChildItem -LiteralPath $parent_directory -Force).Count -eq 0)) {
-        Remove-Item -LiteralPath $parent_directory -Force
+    if ($is_reparse_point) {
+        Remove-Item -LiteralPath $canonical_target -Force
+    }
+    else {
+        Remove-Item -LiteralPath $canonical_target -Recurse -Force
+    }
+
+    $parent_directory = Split-Path -Parent $canonical_target
+    $is_scheme_parent = $parent_directory.EndsWith(
+        'Disc_Cursor_Scheme',
+        [System.StringComparison]::OrdinalIgnoreCase
+    )
+
+    if ((Test-Path -LiteralPath $parent_directory) -and $is_scheme_parent) {
+        try {
+            $has_remaining_files = [bool](Get-ChildItem -LiteralPath $parent_directory `
+                -Force -ErrorAction Stop | Select-Object -First 1)
+            if (-not $has_remaining_files) {
+                Remove-Item -LiteralPath $parent_directory -Force -ErrorAction SilentlyContinue
+            }
+        }
+        catch {
+            $lock_warning = 'File lock prevents parent directory removal. ' +
+                'Verify remaining files.'
+            Write-Warning -Message $lock_warning
+        }
     }
 }
 
 function broadcast_removal_notification {
     param()
 
-    $type_name = 'Remover_Cursor_Notifier'
+    $type_name = 'Cursor_Native_Notifier'
     $full_type_name = "Disc_Cursor_Scheme.$type_name"
     $native_reloader = $full_type_name -as [type]
 
@@ -119,17 +159,25 @@ function broadcast_removal_notification {
         SetLastError = true
     )]
     public static extern bool SystemParametersInfo(
-        uint user_action,
-        uint first_option,
-        string string_option,
-        uint change_notification
+        uint action_identifier,
+        uint parameter_first,
+        System.IntPtr parameter_second,
+        uint update_flags
     );
 '@
 
-        $native_reloader = Add-Type -MemberDefinition $signature_definition `
-            -Name $type_name `
-            -Namespace 'Disc_Cursor_Scheme' `
-            -PassThru
+        try {
+            $native_reloader = Add-Type -MemberDefinition $signature_definition `
+                -Name $type_name `
+                -Namespace 'Disc_Cursor_Scheme' `
+                -PassThru
+        }
+        catch {
+            $policy_warning = 'System policy restricts live shell reload. ' +
+                'Sign out or reload desktop session to apply changes.'
+            Write-Warning -Message $policy_warning
+            return
+        }
     }
 
     $SPI_SETCURSORS = 0x0057
@@ -139,45 +187,52 @@ function broadcast_removal_notification {
     $has_broadcast = $native_reloader::SystemParametersInfo(
         $SPI_SETCURSORS,
         0,
-        [string]::Empty,
+        [System.IntPtr]::Zero,
         $update_flags
     )
 
     if (-not $has_broadcast) {
-        Write-Warning -Message "Shell cursor refresh failed. Log out or restart system session to refresh cursors."
+        $error_code = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
+        $failure_warning = 'Shell cursor update fails with Win32 error code ' +
+            "$error_code. Sign out or reload desktop session to apply changes."
+        Write-Warning -Message $failure_warning
     }
 }
 
 function execute_uninstallation {
-    param([string]$target_directory)
+    param(
+        [string]$target_directory,
+        [string]$expected_root
+    )
 
-    $state = [Removal_Summary_State]::new()
     $standard_roles = collected_standard_roles
 
     delete_scheme_entry -scheme_name $SCHEME_NAME
 
     restore_standard_cursors -role_names $standard_roles
-    $state.is_registry_cleared = $true
 
-    purge_target_directory -target_directory $target_directory
-    $state.is_directory_cleared = (-not (Test-Path -LiteralPath $target_directory))
+    purge_target_directory `
+        -target_directory $target_directory `
+        -expected_root $expected_root
 
     broadcast_removal_notification
-
-    return $state
 }
 
-$local_data_directory = [System.Environment]::GetFolderPath(
-    [System.Environment+SpecialFolder]::LocalApplicationData
-)
-if ([string]::IsNullOrWhiteSpace($local_data_directory)) {
-    $local_data_directory = $env:LOCALAPPDATA
+$local_data_directory = $env:LOCALAPPDATA
+if (-not $local_data_directory) {
+    $folder_type = [System.Environment+SpecialFolder]::LocalApplicationData
+    $local_data_directory = [System.Environment]::GetFolderPath($folder_type)
 }
+
 if ([string]::IsNullOrWhiteSpace($local_data_directory)) {
-    throw [System.IO.DirectoryNotFoundException]::new('Unable to resolve LocalApplicationData directory.')
+    $directory_error = 'LocalApplicationData path does not exist. ' +
+        'Set LOCALAPPDATA environment variable.'
+    throw [System.IO.DirectoryNotFoundException]::new($directory_error)
 }
 
 $cursor_target_directory = Join-Path -Path $local_data_directory `
     -ChildPath 'Disc_Cursor_Scheme\cursor'
 
-execute_uninstallation -target_directory $cursor_target_directory | Out-Null
+execute_uninstallation `
+    -target_directory $cursor_target_directory `
+    -expected_root $local_data_directory
