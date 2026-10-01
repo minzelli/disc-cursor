@@ -1,6 +1,6 @@
 # Disc Cursor
 
-A minimalist, high-contrast Windows cursor scheme with disc geometry, static (`.cur`) and animated (`.ani`) files, and automated setup scripts.
+A minimalist, high-contrast Windows cursor scheme featuring disc geometry, static (`.cur`) and animated (`.ani`) cursors, and automated setup scripts.
 
 ---
 
@@ -11,7 +11,7 @@ A minimalist, high-contrast Windows cursor scheme with disc geometry, static (`.
 | ![Normal Select](png/disc-normal.png) | **Normal Select** | `disc-normal.cur` | Primary pointer |
 | ![Help Select](png/disc-help.png) | **Help Select** | `disc-help.cur` | Contextual help |
 | ![Working in Background](gif/disc-working.gif) | **Working in Background** | `disc-working.ani` | Background processing |
-| ![Busy](gif/disc-busy.gif) | **Busy** | `disc-busy.ani` | System busy |
+| ![Busy](gif/disc-busy.gif) | **Busy** | `disc-busy.ani` | System busy indicator |
 | ![Precision Select](png/disc-precision.png) | **Precision Select** | `disc-precision.cur` | Pixel-accurate crosshair |
 | ![Text Select](png/disc-text.png) | **Text Select** | `disc-text.cur` | Text insertion (I-beam) |
 | ![Handwriting](png/disc-handwriting.png) | **Handwriting** | `disc-handwriting.cur` | Pen and stylus input |
@@ -30,9 +30,9 @@ A minimalist, high-contrast Windows cursor scheme with disc geometry, static (`.
 
 ## Features
 
-- **Full Coverage**: Includes all 15 standard Windows cursor roles plus Windows 10/11 Person and Location selectors.
+- **Full Coverage**: Provides all 17 Windows cursor roles: 15 standard roles plus Person and Location selectors.
 - **Fluid Animations**: Smooth disc spinners for background and busy states.
-- **PowerShell Installer**: Registers the scheme and refreshes the shell in one command without rebooting.
+- **PowerShell Installer**: Registers the scheme and refreshes the shell in one command without a reboot.
 - **Clean Uninstaller**: Restores default cursors and removes scheme assets.
 
 ---
@@ -41,7 +41,7 @@ A minimalist, high-contrast Windows cursor scheme with disc geometry, static (`.
 
 ### Option 1: Download from Latest Release (Recommended)
 
-1. Download the **Source code (zip)** from **[Releases](https://github.com/minzelli/disc-cursor/releases/latest)**.
+1. Download **Source code (zip)** from **[Releases](https://github.com/minzelli/disc-cursor/releases/latest)**.
 2. Extract the archive.
 3. Open PowerShell inside the extracted folder and run:
 
@@ -53,7 +53,7 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 
 ### Option 2: Clone with Git
 
-Clone and install in one step:
+Clone the repository and run the installer:
 
 ```powershell
 git clone https://github.com/minzelli/disc-cursor.git
@@ -61,7 +61,7 @@ cd disc-cursor
 powershell -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-### What the Installer Does
+### Installer Workflow
 
 1. Verifies cursor assets against an internal manifest.
 2. Copies cursors to `%LOCALAPPDATA%\Disc_Cursor_Scheme\cursor`.
@@ -79,7 +79,7 @@ To restore defaults and remove assets, run:
 powershell -ExecutionPolicy Bypass -File .\remove.ps1
 ```
 
-### What the Uninstaller Does
+### Uninstaller Workflow
 
 1. Removes the `"Disc"` scheme from `HKCU:\Control Panel\Cursors\Schemes`.
 2. Restores default cursors under `HKCU:\Control Panel\Cursors`.
@@ -97,4 +97,4 @@ powershell -ExecutionPolicy Bypass -File .\remove.ps1
 
 ## License
 
-This project is dedicated to the public domain under [Creative Commons Zero v1.0 Universal (CC0 1.0)](LICENSE). You may copy, modify, distribute, and perform the work, including commercially, without permission or attribution.
+This project is dedicated to the public domain under [Creative Commons Zero v1.0 Universal (CC0 1.0)](LICENSE). Anyone may copy, modify, distribute, and perform the work, including commercially, without permission or attribution.
